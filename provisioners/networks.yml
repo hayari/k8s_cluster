@@ -1,0 +1,12 @@
+networks:
+    "calico": {"yamlurl": "https://docs.projectcalico.org/manifests/calico.yaml", "pod_network_cidr": "192.167.0.0/16" }
+    "flannel": {"yamlurl": "https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml", "pod_network_cidr": "10.244.0.0/16" }
+    "canal": {"yamlurl": "https://docs.projectcalico.org/v3.8/manifests/canal.yaml", "pod_network_cidr": "10.244.0.0/16" }
+    "romana": {"yamlurl": "https://raw.githubusercontent.com/romana/romana/master/containerize/specs/romana-kubeadm.yml", "pod_network_cidr": "10.244.0.0/16" }
+    "weave": {"yamlurl": 'https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d "\n")', "pod_network_cidr": "10.244.0.0/16" }
+    "cilium": {"yamlurl": "https://raw.githubusercontent.com/cilium/cilium/v1.4/examples/kubernetes/1.13/cilium.yaml", "pod_network_cidr": "10.244.0.0/16" }
+    "kube-router": {"yamlurl": "https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter-all-features.yaml", "pod_network_cidr": "10.244.0.0/16" }
+
+kubernetes_version: 1.20.1-00
+kubelet_version: 1.20.1-00
+docker_version: 5:19.03.14~3-0~ubuntu-xenial

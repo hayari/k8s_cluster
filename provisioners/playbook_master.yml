@@ -1,0 +1,250 @@
+---
+- name: Ansible provisioning
+  hosts: all
+  become: yes
+  become_user: root
+  vars:
+    
+    apiserver_advertise_address: 196.168.121.20  
+    # valid networks are listed in networks.yml
+    network: "calico"
+    # taint or no the master node
+    taint_master_node: no
+  vars_files:
+    networks.yml
+  tasks:
+    - name: install needed packages
+      package:
+        name: 
+          - apt-transport-https 
+          - curl
+          - software-properties-common
+
+
+        state: latest
+        
+    - name: enable empty password
+      lineinfile: 
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitEmptyPasswords'
+        line: 'PermitEmptyPasswords yes'
+        state: present
+        
+    - name: permit root login
+      lineinfile: 
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin yes'
+        state: present
+        
+    - name: permit password Authentification
+      lineinfile: 
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        state: present
+      register: sshdconfig
+        
+    - name: restart sshd service
+      service:  name=sshd  state=restarted
+      when: sshdconfig is changed
+      
+    - name: Make sure we have a 'wheel' group
+      group:
+         name: wheel
+         state: present
+
+    - name: Allow 'wheel' group to have passwordless sudo
+      lineinfile:
+          dest: /etc/sudoers
+          state: present
+          regexp: '^%wheel'
+          line: '%wheel ALL=(ALL) NOPASSWD: ALL'
+          validate: 'visudo -cf %s'
+          
+    - name: add apt repo for docker
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable 
+        state: present
+        filename: docker
+        update_cache: yes
+        
+        
+    - name: install docker   
+      package:
+        name:
+          - "docker-ce={{docker_version}}" 
+          - "docker-ce-cli={{docker_version}}" 
+          - "containerd.io" 
+        force: yes
+        
+    - name: create docker service
+      copy:
+        src: docker.service
+        dest: /lib/systemd/system/docker.service  
+      register:  dockerservice
+       
+        
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+        
+    - name: restart docker service
+      service:
+        name: docker
+        state: restarted
+        enabled: yes
+      when: dockerservice is changed
+        
+    - name: remove swap
+      lineinfile: 
+        path: /etc/fstab
+        regexp: 'swap'
+        state: absent
+        
+    - name: disable swap
+      command: "swapoff -a"
+      
+    - name: ensure ufw is running
+      service:
+        name: ufw
+        state: started
+        enabled: yes
+                        
+    
+    - name: open all ports for master     
+      ufw:
+        rule: allow
+        port: "{{item}}"
+        proto: tcp
+      with_items:
+       - '6443'
+       - '2379:2380'
+       - '10250'
+       - '10251'
+       - '10252'
+       
+    - name: configure sysctl
+      sysctl:
+        name: "{{item}}"
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+      with_items:
+        - net.bridge.bridge-nf-call-ip6tables 
+        - net.bridge.bridge-nf-call-iptables 
+        
+    - name: add apt key
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present  
+        
+    - name: add apt repo
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-xenial main 
+        state: present
+        filename: kubernetes
+        update_cache: yes
+        
+    - name: install kubeadm
+      package:
+        name:
+          - "kubelet={{kubernetes_version}}"
+          - "kubeadm={{kubelet_version}}"
+          - "kubectl={{kubernetes_version}}"
+    
+    - name: initialize the cluster
+      shell: "kubeadm init --pod-network-cidr={{ networks[network]['pod_network_cidr'] }} --apiserver-advertise-address {{apiserver_advertise_address}} "
+      register: kubeadm_out
+      args:
+       creates: /etc/kubernetes/admin.conf  
+       
+    - name: print output
+      debug:
+        msg: "{{kubeadm_out}}"    
+        
+    - name: get results localy
+      copy:
+        content: "{{kubeadm_out.stdout}}"
+        dest: kubeadm.out
+        force: yes
+      delegate_to: localhost
+      when: kubeadm_out is changed
+    
+    - name: Get token
+      set_fact:
+         token: "{{ item | regex_search(' --token (.*) ')  }}"
+      with_file: kubeadm.out
+      delegate_to: localhost
+      
+    - name: Get token_ca_cert
+      set_fact:
+         token_ca_cert: "{{ item | regex_search(' --discovery-token-ca-cert-hash (.*)')  }}"
+      with_file: kubeadm.out
+      delegate_to: localhost
+    
+    - name: generate join cmd
+      copy:
+        content: "kubeadm join {{apiserver_advertise_address}}:6443 {{token}} {{token_ca_cert}}"  
+        dest: joincmd.txt
+      delegate_to: localhost
+        
+    - name: create .kube dir
+      file:
+            path: /home/vagrant/.kube
+            state: directory
+            owner: vagrant
+            group: vagrant
+            
+    - name: create config file
+      copy:
+            src: /etc/kubernetes/admin.conf
+            remote_src: yes
+            dest: /home/vagrant/.kube/config
+            owner: vagrant
+            group: vagrant
+    
+    - name: get state of pods network
+      shell:  export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl get pods --all-namespaces 
+      register: podnets
+      
+    - name: extract state of coredns
+      set_fact:
+         coredns: "{{ podnets is search('coredns')  }}"
+    
+    - debug:
+        var: networks[network]
+          
+    - name: create a pod network
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl apply -f {{networks[network]['yamlurl']}}"
+      when: not coredns
+      register: createnet
+      
+       
+    - fail:
+         msg: "could not install pod network"
+      when: createnet is failed
+      
+    - name: Control plane node isolation
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl taint nodes --all node-role.kubernetes.io/master-"
+      register: tainted
+      when: taint_master_node
+      
+    - name: deploy Dashboard
+      shell: "export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended.yaml"
+      when: not coredns
+
+    - name: remove old kubectl config
+      file:
+         path: /home/hichem/.kube/config
+         state: absent
+      delegate_to: localhost
+
+    - name: configure localhost kubectl
+      fetch:
+        dest: /home/hichem/.kube/
+        flat: yes
+        src: /home/vagrant/.kube/config
+... 

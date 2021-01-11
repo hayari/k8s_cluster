@@ -1,0 +1,201 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  redis-rep
+  labels:
+    app: redis
+spec:
+  template:
+    metadata:
+      name: redis-pod
+      labels:
+         app: redis
+    spec:
+      containers:
+         - name: redis-container
+           image: redis 
+           ports:
+              - containerPort: 6379
+  replicas: 1
+  selector:
+      matchLabels:
+        app: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: ClusterIP
+  ports: 
+    - targetPort: 6379
+      port: 6379
+  selector:  
+    app: redis
+
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  db-rep
+  labels:
+    app: db
+spec:
+    template:
+      metadata:
+        name: db-pod
+        labels:
+          app: db
+      spec:
+         containers:
+         - name: db-container
+           image: postgres:9
+           env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name:  POSTGRES_PASSWORD
+              value: "postgres"
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: trust
+           ports:
+            - containerPort: 5432
+    replicas: 1
+    selector:
+      matchLabels:
+        app: db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+spec:
+  type: ClusterIP
+  ports: 
+    - targetPort: 5432
+      port: 5432
+  selector:  
+    app: db
+
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  voting-rep
+  labels:
+    app: voting
+spec:
+  template:
+    metadata:
+      name: voting-pod
+      labels:
+         app: voting
+    spec:
+      containers:
+         - name: voting-container
+           image: dockersamples/examplevotingapp_vote
+  replicas: 5
+  selector:
+      matchLabels:
+        app: voting
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voting-svc
+spec:
+  type: NodePort
+  ports: 
+    - targetPort: 80
+      port: 80
+      nodePort: 30080
+  selector:  
+    app: voting
+
+
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  result-rep
+  labels:
+    app: result
+spec:
+  template:
+    metadata:
+      name: result-pod
+      labels:
+         app: result
+    spec:
+      containers:
+         - name: result-container
+           image: dockersamples/examplevotingapp_result 
+  replicas: 3
+  selector:
+      matchLabels:
+        app: result
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: result
+spec:
+  type: NodePort
+  ports: 
+    - targetPort: 80
+      port: 80
+      nodePort: 30010
+  selector:  
+    app: result
+
+
+
+
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  worker-rep
+  labels:
+    app: worker
+spec:
+  template:
+    metadata:
+      name: worker-pod
+      labels:
+         app: worker
+    spec:
+      containers:
+         - name: worker-container
+           image: dockersamples/examplevotingapp_worker
+  replicas: 1
+  selector:
+      matchLabels:
+        app: worker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+spec:
+  type: ClusterIP
+  ports: 
+    - targetPort: 80
+      port: 80
+
+  selector:  
+    app: worker
+
+  
