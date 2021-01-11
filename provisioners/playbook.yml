@@ -107,11 +107,13 @@
     - name: open all ports nodes   
       ufw:
         rule: allow
-        port: "{{item}}"
-        proto: tcp
+        port: "{{item.ports}}"
+        proto: "{{item.proto}}"
       with_items:
-       - '10250'
-       - '30000:32767'
+       - {proto: 'tcp', ports: '10250'}
+       - {proto: 'tcp', ports: '30000:32767'}
+       - {proto: 'tcp', ports: '7946'}
+       - {proto: 'udp', ports: '7946'}
        
     - name: configure sysctl
       sysctl:

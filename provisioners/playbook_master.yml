@@ -10,8 +10,12 @@
     network: "calico"
     # taint or no the master node
     taint_master_node: no
+    # metallb ip pool addresses
+    metallb_ip_pool: 196.168.121.200-196.168.121.250
+    metallb_version: v0.9.5
   vars_files:
-    networks.yml
+    - networks.yml
+    - metallb-config.yml
   tasks:
     - name: install needed packages
       package:
@@ -116,14 +120,14 @@
     - name: open all ports for master     
       ufw:
         rule: allow
-        port: "{{item}}"
-        proto: tcp
+        port: "{{item.ports}}"
+        proto: "{{item.proto}}"
       with_items:
-       - '6443'
-       - '2379:2380'
-       - '10250'
-       - '10251'
-       - '10252'
+       - {proto: 'tcp', ports: '6443'}
+       - {proto: 'tcp', ports: '2379:2380'}
+       - {proto: 'tcp', ports: '10250'}
+       - {proto: 'tcp', ports: '10251'}
+       - {proto: 'tcp', ports: '10252'}
        
     - name: configure sysctl
       sysctl:
@@ -236,6 +240,16 @@
       shell: "export KUBECONFIG=/etc/kubernetes/admin.conf; kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/aio/deploy/recommended.yaml"
       when: not coredns
 
+    - name: deploy metallb load balancer
+      shell: |
+        export KUBECONFIG=/etc/kubernetes/admin.conf; 
+        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/{{metallb_version}}/manifests/namespace.yaml"
+        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/{{metallb_version}}/manifests/metallb.yaml"
+        kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
+        echo "{{metallb_config}}" | kubectl apply -f -
+      when: not coredns
+
+
     - name: remove old kubectl config
       file:
          path: /home/hichem/.kube/config
@@ -247,4 +261,6 @@
         dest: /home/hichem/.kube/
         flat: yes
         src: /home/vagrant/.kube/config
+
+    
 ... 
