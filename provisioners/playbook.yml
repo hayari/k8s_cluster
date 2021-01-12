@@ -157,4 +157,28 @@
       when:
        - joinout is failed 
 
+    - name: get kubelet extra args file if debian flavour
+      set_fact:  
+        kublet_extra_file: /etc/default/kubelet
+      when: ansible_os_family == "Debian"
+
+    - name: get kubelet extra args file if redhat flavour
+      set_fact:  
+        kublet_extra_file: /etc/sysconfig/kubelet
+      when: ansible_os_family == "Redhat"
+
+    - name: update kubelet extra args
+      lineinfile:
+          path: "{{kublet_extra_file}}"
+          regexp: 'KUBELET_EXTRA_ARGS="--node-ip={{ansible_facts[kubelet_net_interface].ipv4.address}}"'
+          line: 'KUBELET_EXTRA_ARGS="--node-ip={{ansible_facts[kubelet_net_interface].ipv4.address}}"'
+          state: present
+          create: yes
+      register: kubelet_extra_config
+
+    - name: restart kubelet 
+      service:
+        name: kubelet
+        state: restarted
+      when: kubelet_extra_config is changed       
 ... 
