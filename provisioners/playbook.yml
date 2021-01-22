@@ -62,37 +62,37 @@
         update_cache: yes
         
         
-    - name: install docker   
+    - name: install container runtime   
       package:
         name:
-          - "docker-ce={{docker_version}}" 
-          - "docker-ce-cli={{docker_version}}" 
           - "containerd.io" 
+        state: present
         force: yes
 
-    - name: create docker service
-      copy:
-        src: docker.service
-        dest: /lib/systemd/system/docker.service  
-      register:  dockerservice
-        
-    - name: reload systemd
-      systemd:
-        daemon_reload: yes
-        
-                
-    - name: restart docker service
-      service:
-        name: docker
+    - name: update containerd config.toml
+      lineinfile:
+          path: "{{containerd_config_toml_path}}"
+          regexp: "^disabled_plugins"
+          line: "#disabled_plugins = []"
+          state: present
+
+    - name: restart containerd service
+      service: 
+        name: containerd
         state: restarted
-        enabled: yes
-      when: dockerservice is changed
         
     - name: remove swap
       lineinfile: 
         path: /etc/fstab
         regexp: 'swap'
         state: absent
+    
+    - name: Set vm.swappiness to 0 in /etc/sysctl.conf
+      sysctl:
+        name: vm.swappiness
+        value: '0'
+        state: present
+
         
     - name: disable swap
       command: "swapoff -a"
@@ -114,7 +114,12 @@
        - {proto: 'tcp', ports: '30000:32767'}
        - {proto: 'tcp', ports: '7946'}
        - {proto: 'udp', ports: '7946'}
-       
+
+    - name: Ensure br_netfilter is enabled.
+      modprobe:
+        name: br_netfilter
+        state: present
+
     - name: configure sysctl
       sysctl:
         name: "{{item}}"
@@ -125,6 +130,7 @@
       with_items:
         - net.bridge.bridge-nf-call-ip6tables 
         - net.bridge.bridge-nf-call-iptables 
+        - net.ipv4.ip_forward
         
     - name: add apt key
       apt_key:
@@ -140,11 +146,47 @@
         
     - name: install kubeadm
       package:
+        state: present
         name:
           - "kubelet={{kubelet_version}}"
           - "kubeadm={{kubernetes_version}}"
           - "kubectl={{kubernetes_version}}"
-          
+
+    - name: get kubelet extra args file if debian flavour
+      set_fact:  
+        kublet_extra_file: /etc/default/kubelet
+      when: ansible_os_family == "Debian"
+
+    - name: get kubelet extra args file if redhat flavour
+      set_fact:  
+        kublet_extra_file: /etc/sysconfig/kubelet
+      when: ansible_os_family == "Redhat"
+   
+
+    - name: update kubelet extra args
+      lineinfile:
+          path: "{{kublet_extra_file}}"
+          regexp: 'KUBELET_EXTRA_ARGS="--node-ip={{ansible_facts[kubelet_net_interface].ipv4.address}}"'
+          line: 'KUBELET_EXTRA_ARGS="--node-ip={{ansible_facts[kubelet_net_interface].ipv4.address}} "'
+          state: present
+          create: yes
+      register: kubelet_extra_config
+
+    - name: update kubelet kubeadm args
+      lineinfile:
+          path: "{{kublet_extra_file}}"
+          regexp: 'KUBELET_KUBEADM_ARGS'
+          line: 'KUBELET_KUBEADM_ARGS="--container-runtime=remote --container-runtime-endpoint=unix:///run/containerd/containerd.sock"'
+          state: present
+          create: yes
+      register: kubelet_kubeadm_config
+
+    - name: restart kubelet 
+      service:
+        name: kubelet
+        state: restarted
+      when: kubelet_extra_config is changed 
+
     - name: join the cluster
       command: "{{item}}"
       with_file: joincmd.txt    

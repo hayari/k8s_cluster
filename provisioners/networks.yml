@@ -14,3 +14,4 @@ docker_version: 5:19.03.14~3-0~ubuntu-xenial
 
 # Internal network interface on which nodes will communicates
 kubelet_net_interface: eth1
+containerd_config_toml_path: /etc/containerd/config.toml
