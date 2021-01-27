@@ -13,3 +13,7 @@ helm repo update
 
 helm install ingress-nginx ingress-nginx/ingress-nginx
 ```
+
+for authentification use: dex throw ldap (freeipa)
+- https://dexidp.io/docs/connectors/ldap/
+- https://medium.com/preply-engineering/k8s-auth-a81f59d4dff6

@@ -14,6 +14,7 @@
     # metallb ip pool addresses
     metallb_ip_pool: 196.168.121.200-196.168.121.250
     metallb_version: v0.9.5
+  
   vars_files:
     - networks.yml
     - metallb-config.yml
@@ -170,6 +171,22 @@
           - "kubeadm={{kubelet_version}}"
           - "kubectl={{kubernetes_version}}"
     
+    - name: add helm repo key
+      apt_key:
+         url: https://baltocdn.com/helm/signing.asc
+         state: present
+
+    - name: add helm repo
+      apt_repository:
+        repo:  "deb https://baltocdn.com/helm/stable/debian/ all main"
+        state: present
+        update_cache: yes
+
+    - name: install helm
+      package:
+        name: helm
+        state: present
+
     - name: get kubelet extra args file if debian flavour
       set_fact:  
         kublet_extra_file: /etc/default/kubelet
@@ -299,6 +316,16 @@
       when: not coredns
 
 
+    - name: Install ingress-nginx helm chart 
+      shell: |
+         export KUBECONFIG=/etc/kubernetes/admin.conf; 
+         kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.43.0/deploy/static/provider/baremetal/deploy.yaml
+      when: not coredns
+      
+
+
+
+
     - name: remove old kubectl config
       file:
          path: "/home/{{kubectl_os_user}}/.kube/config"
@@ -311,15 +338,6 @@
         flat: yes
         src: /home/vagrant/.kube/config
     
-    # - name: Install ingress-nginx helm chart 
-    #   shell: |
-    #     helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx ;
-    #     helm repo update;
-    #     helm install ingress-nginx ingress-nginx/ingress-nginx;
-    #   when: not coredns
-    #   delegate_to: localhost
-    #   remote_user: root
-    #   become: no
-    #   async: 1
-    #   poll: 0
+
+    
 ... 

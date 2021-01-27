@@ -4,6 +4,7 @@
 VAGRANTFILE_API_VERSION = "2"
 
 cluster = {
+"ipa.example.local" => { :ip => "192.168.121.100", :cpus => 1, :mem => 3072, :boxname => "bento/centos-7.9", :provider => "virtualbox", :playbook => "provisioners/playbook_ipa.yml"},
 "master.example.local" => { :ip => "196.168.121.20", :cpus => 2, :mem => 2048, :boxname => "bento/ubuntu-16.04", :provider => "virtualbox", :playbook => "provisioners/playbook_master.yml" },
  "node1.example.local" => {  :ip => "196.168.121.21", :cpus => 2, :mem => 2048, :boxname => "bento/ubuntu-16.04", :provider => "virtualbox", :playbook => "provisioners/playbook.yml" },
 "node2.example.local" => {  :ip => "196.168.121.22", :cpus => 2, :mem => 2048, :boxname => "bento/ubuntu-16.04", :provider => "virtualbox", :playbook => "provisioners/playbook.yml" }
