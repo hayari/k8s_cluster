@@ -4,11 +4,12 @@ metadata:
   labels:
     app: nginx
   name: nginx
+  
 spec:
   containers:
   - image: nginx
     name: nginx
   restartPolicy: Never
 
-  nodeName: master
+
 

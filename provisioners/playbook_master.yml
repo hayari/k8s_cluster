@@ -322,9 +322,36 @@
          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.43.0/deploy/static/provider/baremetal/deploy.yaml
       when: not coredns
       
+    - name: get last metric server deployment file
+      get_url:
+        url: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+        dest: metric-server.yaml
+      delegate_to: localhost
 
+    - name: use insecure mode for metric server because of self signed certificate
+      replace:
+         path: ./metric-server.yaml
+         regexp: '(\s+)- --secure-port=4443'
+         replace: '\1- --secure-port=4443\1- --kubelet-insecure-tls'
+ 
 
+      delegate_to: localhost
+    - name: Install metric server
+      shell: |
+         export KUBECONFIG=/etc/kubernetes/admin.conf; 
+         cat <<EOF | kubectl apply -f - 
+         {{item}}
+         EOF
 
+      with_file: ./metric-server.yaml
+
+    - name: Install prometheus and Grafana for ingress-nginx 
+      shell: |
+         export KUBECONFIG=/etc/kubernetes/admin.conf; 
+         kubectl apply --kustomize github.com/kubernetes/ingress-nginx/deploy/prometheus/ ;
+         kubectl apply --kustomize github.com/kubernetes/ingress-nginx/deploy/grafana/ ;
+
+      
 
     - name: remove old kubectl config
       file:
