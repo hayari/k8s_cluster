@@ -13,7 +13,7 @@
     taint_master_node: no
     # metallb ip pool addresses
     metallb_ip_pool: 196.168.121.200-196.168.121.250
-    metallb_version: v0.9.5
+    #metallb_version: v0.9.5
   
   vars_files:
     - networks.yml
@@ -309,8 +309,8 @@
     - name: deploy metallb load balancer
       shell: |
         export KUBECONFIG=/etc/kubernetes/admin.conf; 
-        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/{{metallb_version}}/manifests/namespace.yaml"
-        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/{{metallb_version}}/manifests/metallb.yaml"
+        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/main/manifests/namespace.yaml"
+        kubectl apply -f "https://raw.githubusercontent.com/metallb/metallb/main/manifests/metallb.yaml"
         kubectl create secret generic -n metallb-system memberlist --from-literal=secretkey="$(openssl rand -base64 128)"
         echo "{{metallb_config}}" | kubectl apply -f -
       when: not coredns
@@ -319,7 +319,7 @@
     - name: Install ingress-nginx helm chart 
       shell: |
          export KUBECONFIG=/etc/kubernetes/admin.conf; 
-         kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.43.0/deploy/static/provider/baremetal/deploy.yaml
+         kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/baremetal/deploy.yaml
       when: not coredns
       
     - name: get last metric server deployment file
@@ -327,22 +327,23 @@
         url: https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
         dest: metric-server.yaml
       delegate_to: localhost
+      when: not coredns
 
     - name: use insecure mode for metric server because of self signed certificate
       replace:
          path: ./metric-server.yaml
          regexp: '(\s+)- --secure-port=4443'
          replace: '\1- --secure-port=4443\1- --kubelet-insecure-tls'
- 
-
+      when: not coredns
       delegate_to: localhost
+
     - name: Install metric server
       shell: |
          export KUBECONFIG=/etc/kubernetes/admin.conf; 
          cat <<EOF | kubectl apply -f - 
          {{item}}
          EOF
-
+      when: not coredns
       with_file: ./metric-server.yaml
 
     - name: Install prometheus and Grafana for ingress-nginx 
@@ -350,7 +351,7 @@
          export KUBECONFIG=/etc/kubernetes/admin.conf; 
          kubectl apply --kustomize github.com/kubernetes/ingress-nginx/deploy/prometheus/ ;
          kubectl apply --kustomize github.com/kubernetes/ingress-nginx/deploy/grafana/ ;
-
+      when: not coredns
       
 
     - name: remove old kubectl config
