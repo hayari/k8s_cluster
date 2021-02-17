@@ -170,7 +170,16 @@
           - "kubelet={{kubernetes_version}}"
           - "kubeadm={{kubelet_version}}"
           - "kubectl={{kubernetes_version}}"
-    
+
+    - name: Hold packages
+      dpkg_selections:
+        name: "{{item}}"
+        selection: hold
+      with_items:
+        - kubelet
+        - kubeadm
+        - kubectl
+
     - name: add helm repo key
       apt_key:
          url: https://baltocdn.com/helm/signing.asc

@@ -152,6 +152,15 @@
           - "kubeadm={{kubernetes_version}}"
           - "kubectl={{kubernetes_version}}"
 
+    - name: Hold packages
+      dpkg_selections:
+        name: "{{item}}"
+        selection: hold
+      with_items:
+        - kubelet
+        - kubeadm
+        - kubectl
+
     - name: get kubelet extra args file if debian flavour
       set_fact:  
         kublet_extra_file: /etc/default/kubelet
